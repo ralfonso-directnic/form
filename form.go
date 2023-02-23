@@ -180,6 +180,84 @@ func (f *Form) RenderBind(from interface{}, to interface{}, errs ...error) (temp
 
 }
 
+func (f *Form) RenderField(v interface{},field_name string, errs ...error) (template.HTML, error) {
+
+	fields := fields(v)
+	errors := fieldErrors(errs)
+	var html template.HTML
+	for _, field := range fields {
+
+		if field.Name != field_name {
+			continue		
+		
+		}
+		field.Prefix = f.Prefix
+
+		dump := false
+
+		for _, sv := range f.Skip {
+
+			if sv == field.Name {
+				dump = true
+				break
+			}
+
+			last := sv[len(sv)-1:]
+			//nested struct, lets block anything with that dot
+			if last == "." {
+
+				if strings.Contains(field.Name, sv) {
+					dump = true
+					break
+				}
+
+			}
+
+		}
+
+		if dump == true {
+			continue
+		}
+
+		if field.Type == "select" || field.Type == "checkbox" {
+
+			if it, oks := f.selectMap[field.Name]; oks {
+
+				field.Items = it
+
+				//this block allows us to set the select value as an output ie CA=California, f.Value is CA and f.SelectValue is California
+				for v, k := range it {
+					if k == field.Value {
+						field.SelectValue = v
+					}
+
+				}
+
+			}
+
+		}
+
+		var sb strings.Builder
+
+		f.Tpl.Funcs(template.FuncMap{
+			"errors": func() []string {
+				if errs, ok := errors[field.Name]; ok {
+					return errs
+				}
+				return nil
+			},
+		})
+
+		err := f.Tpl.Execute(&sb, field)
+		if err != nil {
+			return "", err
+		}
+		html = html + template.HTML(sb.String())
+	}
+	return html, nil
+
+}
+
 func (f *Form) Render(v interface{}, errs ...error) (template.HTML, error) {
 
 	fields := fields(v)
