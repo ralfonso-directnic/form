@@ -168,7 +168,7 @@ func (f *Form) Select(nm string, mp map[string]interface{}) {
 
 func (f *Form) RenderBind(from interface{}, to interface{}, errs ...error) (template.HTML, error) {
 
-	ce := copier.Copy(&to, &from)
+	ce := copier.Copy(to, from)
 
 	if ce != nil {
 
@@ -180,7 +180,7 @@ func (f *Form) RenderBind(from interface{}, to interface{}, errs ...error) (temp
 
 }
 
-func (f *Form) RenderField(v interface{},field_name string, errs ...error) (template.HTML, error) {
+func (f *Form) RenderField(v interface{}, field_name string, errs ...error) (template.HTML, error) {
 
 	fields := fields(v)
 	errors := fieldErrors(errs)
@@ -188,8 +188,8 @@ func (f *Form) RenderField(v interface{},field_name string, errs ...error) (temp
 	for _, field := range fields {
 
 		if field.Name != field_name {
-			continue		
-		
+			continue
+
 		}
 		field.Prefix = f.Prefix
 
