@@ -129,6 +129,48 @@ And we get an output like this:
 
 ```
 
+## Handle and validate a post using the go-playground validator
+
+
+```
+    type Info struct {
+        Name    string `form:"required" validate:"required"`
+        Email   string `form:"required" validate:"email"`
+        Street1 string `form:"required"  validate:"required"`
+        Street2 string
+        City    string
+        State   string
+        Zip     string `form:"label=Postal Code"`
+    }
+    
+    //set a base path for form to look for
+    form.BasePath("./tmpl")
+    
+    //load basic.html tempalte
+	frm, err := form.New("/basic.html") 
+
+	a := &Info{}
+
+	//decode a post, returns err if no post
+	derr := frm.DecodePost(req, a)
+
+	if derr == nil {
+
+		stat, errs := frm.Validate(a)
+
+		if !stat {
+			fmt.Println("Validation Error", errs)
+			//Validation Error [{Email  email} {Street1  required}]
+
+		}
+
+	}
+
+
+
+
+```
+
 ## Installation
 
 To install this package, simply `go get` it:

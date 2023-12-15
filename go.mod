@@ -1,6 +1,6 @@
 module github.com/ralfonso-directnic/form
 
-go 1.15
+go 1.19
 
 require (
 	github.com/Masterminds/goutils v1.1.1 // indirect

@@ -1,11 +1,16 @@
 package form
 
 import (
+	"errors"
+	"fmt"
 	"github.com/Masterminds/sprig"
+	validator "github.com/go-playground/validator/v10"
+	"github.com/gorilla/schema"
 	"github.com/jinzhu/copier"
 	"github.com/nyaruka/phonenumbers"
 	"html/template"
 	"io/ioutil"
+	"net/http"
 	"path/filepath"
 	"strings"
 	"time"
@@ -17,12 +22,16 @@ var Funcs template.FuncMap
 
 type Form struct {
 	Tpl       *template.Template
+	Decoder   *schema.Decoder
+	Validator *validator.Validate
 	selectMap map[string]map[string]interface{}
 	Action    string
 	Method    string
 	Prefix    string
 	Skip      []string
 }
+
+var ErrInvalidMethod = errors.New("Invalid Method")
 
 func init() {
 
@@ -145,7 +154,10 @@ func New(pth ...string) (*Form, error) {
 		},
 	}).Parse(frmstr))
 
-	return &Form{Tpl: tpl}, errf
+	decoder := schema.NewDecoder()
+	vd := validator.New(validator.WithRequiredStructEnabled())
+
+	return &Form{Tpl: tpl, Decoder: decoder, Validator: vd}, errf
 
 }
 
@@ -178,6 +190,62 @@ func (f *Form) RenderBind(from interface{}, to interface{}, errs ...error) (temp
 
 	return f.Render(to, errs...)
 
+}
+
+func (f *Form) DecodePost(req *http.Request, holder any) error {
+
+	if req.Method == http.MethodPost && f.Decoder != nil {
+
+		req.ParseForm()
+
+		derr := f.Decoder.Decode(holder, req.PostForm)
+
+		if derr != nil {
+
+			return derr
+
+		}
+
+		return nil
+
+	} else {
+
+		return ErrInvalidMethod
+	}
+
+}
+
+type ValidationError struct {
+	Field string
+	Value string
+	Type  string
+}
+
+func (f *Form) Validate(holder any) (bool, []ValidationError) {
+
+	var vee []ValidationError
+
+	ve := f.Validator.Struct(holder)
+
+	if ve != nil {
+
+		if _, ok := ve.(*validator.InvalidValidationError); ok {
+
+			return false, vee
+		}
+
+		for _, err := range ve.(validator.ValidationErrors) {
+
+			//fmt.Println(err.Namespace())
+
+			vee = append(vee, ValidationError{Field: err.Field(), Value: fmt.Sprint(err.Value()), Type: err.Tag()})
+
+		}
+
+		return false, vee
+	}
+
+	return true, vee
 }
 
 func (f *Form) RenderField(v interface{}, field_name string, errs ...error) (template.HTML, error) {
