@@ -29,6 +29,7 @@ type Form struct {
 	Method    string
 	Prefix    string
 	Skip      []string
+	Errors    map[string][]string
 }
 
 var ErrInvalidMethod = errors.New("Invalid Method")
@@ -97,6 +98,11 @@ func New(pth ...string) (*Form, error) {
 		frmstr = string(frm)
 	}
 
+	f := Form{}
+
+	//for future use
+	f.Errors = make(map[string][]string)
+
 	//embed our own funcs as well as sprig
 	tpl := template.Must(template.New("form").Funcs(Funcs).Funcs(sprig.FuncMap()).Funcs(template.FuncMap{
 		"datetimelocal": func(val interface{}) (out string) {
@@ -157,7 +163,11 @@ func New(pth ...string) (*Form, error) {
 	decoder := schema.NewDecoder()
 	vd := validator.New(validator.WithRequiredStructEnabled())
 
-	return &Form{Tpl: tpl, Decoder: decoder, Validator: vd}, errf
+	f.Tpl = tpl
+	f.Decoder = decoder
+	f.Validator = vd
+
+	return &f, errf
 
 }
 
@@ -178,15 +188,16 @@ func (f *Form) Select(nm string, mp map[string]interface{}) {
 
 ///copy a source item to dest item and render, for example if you have a db result struct and a form struct, you can copy the db values to the form and then render it
 
-func (f *Form) RenderBind(from interface{}, to interface{}, errs ...error) (template.HTML, error) {
+func (f *Form) RenderBind(from interface{}, to interface{}, errs ...[]ValidationError) (template.HTML, error) {
 
-	ce := copier.Copy(to, from)
+	copier.Copy(to, from)
 
-	if ce != nil {
+	/*
+		if ce != nil {
 
-		errs = append(errs, ce)
+			errs = append(errs, ce)
 
-	}
+		}*/
 
 	return f.Render(to, errs...)
 
@@ -216,9 +227,31 @@ func (f *Form) DecodePost(req *http.Request, holder any) error {
 }
 
 type ValidationError struct {
-	Field string
-	Value string
-	Type  string
+	Field    string
+	Value    string
+	Type     string
+	Override string
+	Param    interface{}
+}
+
+func (v *ValidationError) Error() string {
+
+	if len(v.Override) > 0 {
+		return v.Override //this is a shortcut for translation, set Override to what you want
+	}
+
+	out := strings.Title(v.Type)
+
+	switch v.Type {
+	case "email":
+		out = "Invalid Email"
+	case "len":
+		out = fmt.Sprintf("Invalid Length,needs: %s", v.Param)
+	case "alpha":
+		out = "Letters Only"
+	}
+
+	return out
 }
 
 func (f *Form) Validate(holder any) (bool, []ValidationError) {
@@ -236,9 +269,7 @@ func (f *Form) Validate(holder any) (bool, []ValidationError) {
 
 		for _, err := range ve.(validator.ValidationErrors) {
 
-			//fmt.Println(err.Namespace())
-
-			vee = append(vee, ValidationError{Field: err.Field(), Value: fmt.Sprint(err.Value()), Type: err.Tag()})
+			vee = append(vee, ValidationError{Field: err.Field(), Value: fmt.Sprint(err.Value()), Type: err.Tag(), Param: err.Param()})
 
 		}
 
@@ -248,10 +279,16 @@ func (f *Form) Validate(holder any) (bool, []ValidationError) {
 	return true, vee
 }
 
-func (f *Form) RenderField(v interface{}, field_name string, errs ...error) (template.HTML, error) {
+func (f *Form) RenderField(v interface{}, field_name string, errs_raw ...[]ValidationError) (template.HTML, error) {
 
 	fields := fields(v)
-	errors := fieldErrors(errs)
+
+	var errs []ValidationError
+
+	if len(errs_raw) > 0 {
+		errs = errs_raw[0]
+	}
+
 	var html template.HTML
 	for _, field := range fields {
 
@@ -307,14 +344,11 @@ func (f *Form) RenderField(v interface{}, field_name string, errs ...error) (tem
 
 		var sb strings.Builder
 
-		f.Tpl.Funcs(template.FuncMap{
-			"errors": func() []string {
-				if errs, ok := errors[field.Name]; ok {
-					return errs
-				}
-				return nil
-			},
-		})
+		for _, ee := range errs {
+			if ee.Field == field.Name {
+				field.Errors = append(field.Errors, ee.Error())
+			}
+		}
 
 		err := f.Tpl.Execute(&sb, field)
 		if err != nil {
@@ -326,10 +360,16 @@ func (f *Form) RenderField(v interface{}, field_name string, errs ...error) (tem
 
 }
 
-func (f *Form) Render(v interface{}, errs ...error) (template.HTML, error) {
+func (f *Form) Render(v interface{}, errs_raw ...[]ValidationError) (template.HTML, error) {
 
 	fields := fields(v)
-	errors := fieldErrors(errs)
+
+	var errs []ValidationError
+
+	if len(errs_raw) > 0 {
+		errs = errs_raw[0]
+	}
+
 	var html template.HTML
 	for _, field := range fields {
 
@@ -381,14 +421,11 @@ func (f *Form) Render(v interface{}, errs ...error) (template.HTML, error) {
 
 		var sb strings.Builder
 
-		f.Tpl.Funcs(template.FuncMap{
-			"errors": func() []string {
-				if errs, ok := errors[field.Name]; ok {
-					return errs
-				}
-				return nil
-			},
-		})
+		for _, ee := range errs {
+			if ee.Field == field.Name {
+				field.Errors = append(field.Errors, ee.Error())
+			}
+		}
 
 		err := f.Tpl.Execute(&sb, field)
 		if err != nil {

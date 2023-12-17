@@ -2,11 +2,6 @@
 
 Easily create HTML forms with Go structs.
 
-[![go report card](https://goreportcard.com/badge/github.com/joncalhoun/form "go report card")](https://goreportcard.com/report/github.com/joncalhoun/form)
-[![Build Status](https://travis-ci.org/joncalhoun/form.svg?branch=master)](https://travis-ci.org/joncalhoun/form)
-[![MIT license](http://img.shields.io/badge/license-MIT-brightgreen.svg)](http://opensource.org/licenses/MIT)
-[![GoDoc](https://godoc.org/github.com/joncalhoun/form?status.svg)](https://godoc.org/github.com/joncalhoun/form)
-
 ## Overview
 
 The `form` package makes it easy to take a Go struct and turn it into an HTML form using whatever HTML format you want. Below is an example, along with the output, but first let's just look at an example of what I mean.
@@ -37,76 +32,12 @@ Now you want to generate an HTML form for it, but that is somewhat annoying if y
 		{{.Label}}
 	</label>
 	<input class="shadow appearance-none border rounded w-full py-2 px-3 text-grey-darker leading-tight {{if errors}}border-red{{end}}" {{with .ID}}id="{{.}}"{{end}} type="{{.Type}}" name="{{.Name}}" placeholder="{{.Placeholder}}" {{with .Value}}value="{{.}}"{{end}}>
-	{{range errors}}
+	{{range .Errors}}
 		<p class="text-red pt-2 text-xs italic">{{.}}</p>
 	{{end}}
 </div>
 ```
 
-This particular example is using [Tailwind CSS](https://tailwindcss.com/docs/what-is-tailwind/) to style the values, along with the `errors` template function which is provided via this `form` package when it creates the inputs for each field.
-
-Now we can render this entire struct as a form by simply using the `inputs_for` template function which is provided by the `form.Builder`'s `FuncMap` method:
-
-```html
-<form class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4" action="/" method="post">
-  {{inputs_for .Customer}}
-  <!-- ... add buttons here -->
-</form>
-```
-
-And with it we will generate an HTML form like the one below:
-
-![Example output from the forms package](example.png)
-
-Data set in the `.Customer` variable in our template will also be used when rendering the form, which is why you see `Michael Scott` and `michael@dunder.com` in the screenshot - these were set in the `.Customer` and were thus used to set the input's value.
-
-Error rendering is also possible, but requires the usage of the `inputs_and_errors_for` template function, and you need to pass in errors that implement the `fieldError` interface (shown below, but NOT exported):
-
-```go
-type fieldError interface {
-	FieldError() (field, err string)
-}
-```
-
-For instance, in [examples/errors/errors.go](examples/errors/errors.go) we pass data similar the following into our template when executing it:
-
-```go
-data := struct {
-  Form   customer
-  Errors []error
-}{
-  Form: customer{
-    Name:    "Michael Scott",
-    Email:   "michael@dunder.com",
-    Address: nil,
-  },
-  Errors: []error{
-    fieldError{
-      Field: "Email",
-      Issue: "is already taken",
-    },
-    fieldError{
-      Field: "Address.Street1",
-      Issue: "is required",
-    },
-    ...
-  },
-}
-tpl.Execute(w, data)
-```
-
-And then in the template we call the `inputs_and_errors_for` function:
-
-```html
-<form class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4" action="/" method="post">
-  {{inputs_and_errors_for .Form .Errors}}
-  <!-- ... buttons here -->
-</form>
-```
-
-And we get an output like this:
-
-![Example output from the forms package with errors](examples/errors/errors.png)
 
 
 ## Alternative Syntax
@@ -135,11 +66,11 @@ And we get an output like this:
 ```
     type Info struct {
         Name    string `form:"required" validate:"required"`
-        Email   string `form:"required" validate:"email"`
+        Email   string `form:"required" validate:"email,required"`
         Street1 string `form:"required"  validate:"required"`
         Street2 string
         City    string
-        State   string
+        State   string `validate:"len=2,alpha"`
         Zip     string `form:"label=Postal Code"`
     }
     
@@ -166,6 +97,14 @@ And we get an output like this:
 
 	}
 
+
+	var s string
+	if err == nil { //handle error}
+		out, _ := frm.Render(a, errs)
+		s = fmt.Sprint(out)
+	} else {
+		s = fmt.Sprint(err)
+	}
 
 
 
