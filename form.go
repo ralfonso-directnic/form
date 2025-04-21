@@ -324,7 +324,7 @@ func (f *Form) RenderField(v interface{}, field_name string, errs_raw ...[]Valid
 			continue
 		}
 
-		if field.Type == "select" || field.Type == "checkbox" {
+		if strings.Contains(field.Type, "select") || field.Type == "checkbox" {
 
 			if it, oks := f.selectMap[field.Name]; oks {
 
