@@ -401,7 +401,7 @@ func (f *Form) Render(v interface{}, errs_raw ...[]ValidationError) (template.HT
 			continue
 		}
 
-		if field.Type == "select" || field.Type == "checkbox" {
+		if strings.Contains(field.Type, "select") || field.Type == "checkbox" {
 
 			if it, oks := f.selectMap[field.Name]; oks {
 
